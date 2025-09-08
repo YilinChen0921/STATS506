@@ -1,0 +1,303 @@
+---
+title: "STATS_506_PSET1"
+author: "Yilin Chen"
+format: 
+  html:
+    self-contained: true
+---
+
+## STATS 506 Problem Set 1
+
+Github repository: https://github.com/YilinChen0921/STATS506
+
+## Problem 1 - Abalone Data
+
+### (a)
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(knitr)
+
+```
+
+From the names file, the columns should be named as "Length Diam Height Whole Shucked Viscera Shell Rings"
+
+```{r}
+col_names <- c("Sex", "Length", "Diameter", "Height",
+               "WholeWeight", "ShuckedWeight", 
+               "VisceraWeight", "ShellWeight", "Rings")
+
+abalone <- read.csv("abalone.data", header = FALSE, col.names = col_names)
+head(abalone)
+```
+
+### (b)
+
+```{r}
+table(abalone$Sex)
+```
+
+This the numbers of the observations respect to the sex.
+
+### (c)
+
+```{r}
+weights <- abalone %>%
+  select(WholeWeight, ShuckedWeight, VisceraWeight, ShellWeight, Rings)
+
+cors <- cor(weights)
+cors["Rings", ]
+```
+
+1.  The ShellWeight has the highest correlation compare to other weigts
+
+```{r}
+by_sex <- abalone %>%
+  group_by(Sex) %>%
+  summarise(
+    across(c(ShellWeight),
+           ~ cor(.x, Rings))
+  )
+
+by_sex
+```
+
+2.  Among the sex, infant has the highest correlation with the ShellWeight
+
+```{r}
+max_rings <- max(abalone$Rings)
+abalone %>%
+  filter(Rings == max_rings) %>%
+  select(Sex, WholeWeight, ShuckedWeight, VisceraWeight, ShellWeight, Rings)
+```
+
+3.  These are the respect weights of the female abalone which has 29 rings.
+
+```{r}
+prop <- mean(abalone$VisceraWeight > abalone$ShellWeight) * 100
+prop
+```
+
+4.  About 6.512% of the abalones have a viscera weight larger than their shell weight.
+
+### (d)
+
+```{r}
+cor_table <- abalone %>%
+  group_by(Sex) %>%
+  summarise(
+    WholeWeight = cor(WholeWeight, Rings),
+    ShuckedWeight = cor(ShuckedWeight, Rings),
+    VisceraWeight = cor(VisceraWeight, Rings),
+    ShellWeight = cor(ShellWeight, Rings)
+  )
+
+kable(cor_table, digits = 5)
+```
+
+Above table shows the correlation of rings and each weight under different sex.
+
+### (e)
+
+```{r}
+rings_by_sex <- split(abalone$Rings, abalone$Sex)
+
+t_FM <- t.test(rings_by_sex$F, rings_by_sex$M)
+t_FI <- t.test(rings_by_sex$F, rings_by_sex$I)
+t_MI <- t.test(rings_by_sex$M, rings_by_sex$I)
+
+t_FM
+t_FI
+t_MI
+```
+
+The three tests are created to campare each two of the three sexes. In these tests, the p-value are less than 0.05 so we can reject the null hypothesis and we can conclude that the number of the rings are different among each of the two sexes.
+
+## Problem 2 - Food Expenditure Data
+
+### (a)
+
+```{r}
+food <- read.csv("food_expenditure.csv")
+head(food)
+```
+
+### (b)
+
+```{r}
+names(food) <- c(
+  "id",
+  "age",
+  "household_size",
+  "state",
+  "currency",
+  "last_week",
+  "grocery",
+  "dining_out",
+  "misc",
+  "times_diningout",
+  "alcohol_included",
+  "assistance"
+)
+head(food)
+```
+
+For a clear name, I change the long survey questions to simple phrases.
+
+### (c)
+
+```{r}
+n_before <- nrow(food)
+food_usd <- subset(food, currency == "USD")
+n_after <- nrow(food_usd)
+
+n_before
+n_after
+```
+
+By create a subset only using USD, 32 answers were deleted.
+
+### (d)
+
+```{r}
+food_clean <- subset(food_usd, age >= 18 & age <= 100)
+nrow(food_clean)
+```
+
+Here I cleaned the data that is have age less than 18 or larger than 100 who are plausible to be purchasing food for the family.
+
+### (e)
+
+```{r}
+food_clean <- subset(food_clean, !is.na(state) & state != "")
+nrow(food_clean)
+```
+
+Here I cleaned the data that is providing missing or blank state code.
+
+### (f)
+
+```{r}
+food_clean <- subset(food_clean,
+                     as.numeric(last_week) >= 0 &
+                     grocery >= 0 &
+                     dining_out >= 0 &
+                     misc >= 0)
+nrow(food_clean)
+```
+
+Here I cleaned the data that is providing negative values or blanks in the expenditures.
+
+### (g)
+
+```{r}
+food_clean <- subset(food_clean, 
+                     times_diningout >= 0 & 
+                     times_diningout <= 21)
+nrow(food_clean)
+```
+
+Here I cleaned the data that is providing dining out times with negative values or more than 3 meals a day in a week.
+
+### (h)
+
+```{r}
+n_cleaned <- nrow(food_clean)
+n_cleaned
+```
+
+Under the rules, there are 130 answers remaining in the data set.
+
+## Problem 3 - Collatz Conjecture
+
+### (a)
+
+```{r}
+#' Function to computes the next number in the Collatz sequence for a given positive integer.
+#'
+#' @param n A positive integer
+#'
+#' @return A positive integer: the next number in the Collatz sequence
+nextCollatz <- function(n) {
+  if (!is.numeric(n) || length(n) != 1 || n <= 0 || n != as.integer(n)) {
+    stop("Input must be a single positive integer")
+  }
+  
+  if (n %% 2 == 0) {
+    return(n / 2)
+  } else {
+    return(3 * n + 1)
+  }
+}
+```
+
+e.g.
+
+```{r}
+nextCollatz(5)
+```
+
+```{r}
+nextCollatz(16)
+```
+
+### (b)
+
+```{r}
+#' FUnction generates the full Collatz sequence for a given positive integer, using nextCollatz().
+#'
+#' @param n A positive integer
+#'
+#' @return A list with two elements:
+#'   - sequence: a vector containing the Collatz sequence starting at n and ending at 1
+#'   - length: the length of the sequence
+collatzSequence <- function(n) {
+  if (!is.numeric(n) || length(n) != 1 || n <= 0 || n != as.integer(n)) {
+    stop("Input must be a single positive integer")
+  }
+  
+  seq <- n
+  while (tail(seq, 1) != 1) {
+    seq <- c(seq, nextCollatz(tail(seq, 1)))
+  }
+  
+  return(list(sequence = seq, length = length(seq)))
+}
+```
+
+In the question, the return of the function should include the length of the sequence which are returned by collatzSequence(n)$sequence and collatzSequence(n)$length.
+
+e.g.
+
+```{r}
+collatzSequence(5)
+collatzSequence(5)$sequence
+collatzSequence(19)$sequence
+```
+
+### (c)
+
+```{r}
+results <- data.frame(start = 100:500, length = NA)
+
+for (i in 100:500) {
+  results$length[results$start == i] <- collatzSequence(i)$length
+}
+
+# Shortest
+min_len <- min(results$length)
+shortest_start <- min(results$start[results$length == min_len])
+
+# Longest
+max_len <- max(results$length)
+longest_start <- min(results$start[results$length == max_len])
+
+shortest_start
+min_len
+
+longest_start
+max_len
+```
+
+The number with shortest sequence length is 128 which has sequence length of 8. The number with longest sequence length is 327 which has sequence length of 144.
