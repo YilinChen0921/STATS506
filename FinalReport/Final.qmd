@@ -1,0 +1,151 @@
+---
+title: "Final Report - The National Survey of Nonprofit Trends and Impacts"
+format:
+  html:
+    execute:
+      echo: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE
+)
+```
+
+#### Git Link
+https://github.com/YilinChen0921/STATS506/tree/main/FinalReport
+
+
+### Introduction
+
+While reviewing the National Survey of Nonprofit Trends and Impacts (Spring 2021), I noticed several questions about how nonprofit organizations changed their operations and finances during the COVID-19 pandemic. This raised my curiosity about whether nonprofits in different types of communities—urban, suburban, and rural—experienced the pandemic differently. I have also heard from friends working in nonprofits across cities and small towns that the financial strain they faced varied significantly by location, which motivated my research focus.
+
+### Method
+
+I use the National Survey of Nonprofit Trends and Impacts (Spring 2021).I restrict analyses to completed surveys (Finished == 1) and apply WEIGHT_COMPLETE_ONLY to generate population-representative estimates. I use weighted descriptive statistics to estimate the proportion of nonprofits in rural, urban, and suburban areas that reported increases or decreases in overall expenses since March 2020.
+
+### Results
+
+The COVID-19 pandemic created substantial financial disruption across the U.S. nonprofit sector. Weighted results from the Spring 2021 National Survey of Nonprofit Trends and Impacts show that nonprofits nationwide were more likely to reduce their overall expenses than increase them, indicating widespread financial strain, program interruptions, and uncertainty during the first year of the pandemic. Overall, more than half of all nonprofits reported cutting expenses, while only about one-third reported increasing expenditures in response to rising needs.
+
+Although nonprofits everywhere experienced disruptions, the magnitude and direction of financial adjustments varied across community types.
+
+Urban and suburban nonprofits experienced the strongest financial shock. Organizations operating in urban (≈59.7%) and suburban (≈58.2%) areas were the most likely to report decreased overall expenses. These reductions suggest that nonprofits in more densely populated regions faced sharper declines in revenue, increased program shutdowns, or more abrupt operational constraints. The high prevalence of expense cuts in these communities indicates a stronger immediate financial contraction compared to other areas.
+
+Rural-serving nonprofits faced a different type of pressure. Nonprofits serving rural communities were somewhat less likely to report expense reductions (≈54.2%), indicating a slightly smaller contraction. However, they were the most likely to report increased expenses (≈36.7%). This pattern suggests that many rural organizations confronted rising community needs—such as food insecurity, health outreach, or emergency support—that required expanding services even as resources were strained.
+
+```{r}
+library(dplyr)
+library(readr)
+library(srvyr)
+
+dat <- read_csv("nonprofit-survey-spring-2021-puf.csv")
+
+dat_clean <- dat %>%
+  filter(Finished == 1) %>%
+  mutate(
+    weight = weight_complete_only,
+    rural    = if_else(RuralUrban_1 == 1, 1L, 0L),
+    urban    = if_else(RuralUrban_2 == 1, 1L, 0L),
+    suburban = if_else(RuralUrban_3 == 1, 1L, 0L),
+
+    inc_expenses = case_when(
+      FinanceChanges_5 == 1 ~ 1,
+      FinanceChanges_5 == 0 ~ 0,
+      TRUE ~ NA_real_
+    ),
+    dec_expenses = case_when(
+      FinanceChanges_6 == 1 ~ 1,
+      FinanceChanges_6 == 0 ~ 0,
+      TRUE ~ NA_real_
+    )
+  )
+
+des <- dat_clean %>% as_survey(weights = weight)
+
+
+```
+
+```{r}
+#| fig.width: 8
+#| fig.height: 4
+
+library(dplyr)
+library(srvyr)
+library(ggplot2)
+library(tidyr)
+library(patchwork)
+
+des <- dat_clean %>% as_survey(weights = weight)
+
+get_prop <- function(area_flag, var){
+  des %>%
+    filter({{area_flag}} == 1, !is.na({{var}})) %>%
+    summarize(p = survey_mean({{var}})) %>%
+    pull(p)
+}
+
+results <- tibble(
+  area = c("Rural", "Urban", "Suburban"),
+  inc = c(
+    get_prop(rural, inc_expenses),
+    get_prop(urban, inc_expenses),
+    get_prop(suburban, inc_expenses)
+  ),
+  dec = c(
+    get_prop(rural, dec_expenses),
+    get_prop(urban, dec_expenses),
+    get_prop(suburban, dec_expenses)
+  )
+)
+
+results_long <- results %>%
+  pivot_longer(cols = c("inc", "dec"),
+               names_to = "type",
+               values_to = "value")
+
+# Plot 1: Increased expenses
+p_inc <- ggplot(results_long %>% filter(type == "inc"),
+       aes(x = area, y = value, group = 1)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 3) +
+  labs(
+    title = "Increased Expenses",
+    x = "Community Type",
+    y = "Percent"
+  ) +
+  scale_y_continuous(labels = scales::percent)
+
+# Plot 2: Decreased expenses
+p_dec <- ggplot(results_long %>% filter(type == "dec"),
+       aes(x = area, y = value, group = 1)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 3) +
+  labs(
+    title = "Decreased Expenses",
+    x = "Community Type",
+    y = "Percent"
+  ) +
+  scale_y_continuous(labels = scales::percent)
+
+p_inc | p_dec
+```
+
+### Limitations
+
+#### Cross-sectional data
+
+The survey captures nonprofit experiences at a single point in Spring 2021, limiting the ability to track how financial conditions evolved before or after this period.
+
+#### Self-reported measures
+
+Financial changes (e.g., increased or decreased expenses) are based on respondents’ perceptions rather than audited financial records, which may introduce recall error or subjective interpretation.
+
+#### Non-mutually exclusive community categories
+
+Nonprofits could select multiple community types (rural, urban, suburban), meaning results describe organizations that operate in each area rather than exclusive groups. This limits direct comparisons across mutually exclusive categories.
